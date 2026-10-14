@@ -241,8 +241,6 @@ pyproject.toml       Ruff configuration used by CI and `make lint`
 - **[Developer Guide](docs/DEVELOPER_GUIDE.md)** — boot sequence, request flows with sequence
   diagrams, module-by-module reference, cross-cutting concepts (cache consistency, replication lag),
   testing internals, operations playbook, troubleshooting, guided exercises.
-- **[Implementation plan](P1_URL_Shortener_Implementation_Guide.md)** — the original 14-day build spec,
-  including the study schedule that produced this project.
 
 ## License
 
