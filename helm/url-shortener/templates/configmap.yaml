@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "url-shortener.labels" . | nindent 4 }}
+data:
+  BASE_URL: {{ .Values.backend.env.BASE_URL | quote }}
+  REDIS_URL: {{ .Values.backend.env.REDIS_URL | quote }}
+  CACHE_TTL_SECONDS: {{ .Values.backend.env.CACHE_TTL_SECONDS | quote }}
+  SHORT_CODE_LENGTH: "7"
+  DEFAULT_REDIRECT_STATUS: "302"

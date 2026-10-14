@@ -1,0 +1,50 @@
+# Default values — override per environment
+
+namespace: url-shortener
+# When true, the chart creates the Namespace itself. Leave false if you create
+# it yourself (kubectl create namespace url-shortener) to avoid Helm ownership
+# conflicts on an existing Namespace.
+createNamespace: false
+
+backend:
+  image:
+    repository: ghcr.io/YOUR_USERNAME/p1-url-shortener/backend
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 2
+  port: 8000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  env:
+    BASE_URL: "http://url-shortener.local"
+    REDIS_URL: "redis://redis:6379/0"
+    CACHE_TTL_SECONDS: "3600"
+
+frontend:
+  image:
+    repository: ghcr.io/YOUR_USERNAME/p1-url-shortener/frontend
+    tag: latest
+    pullPolicy: IfNotPresent
+  replicas: 1
+  port: 3000
+
+postgres:
+  image: postgres:16-alpine
+  password: postgres  # Override via --set in production
+  primary:
+    storage: 5Gi
+  replica:
+    storage: 5Gi
+
+redis:
+  image: redis:7-alpine
+  maxmemory: 256mb
+
+ingress:
+  enabled: true
+  host: url-shortener.local

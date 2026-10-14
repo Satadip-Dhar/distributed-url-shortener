@@ -1,0 +1,115 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: pg-primary
+    environment:
+      POSTGRES_DB: urlshortener
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - pg_primary_data:/var/lib/postgresql/data
+      - ./scripts/init-primary.sh:/docker-entrypoint-initdb.d/init-primary.sh:ro
+    ports:
+      - "5432:5432"
+    command: >
+      postgres
+        -c wal_level=replica
+        -c max_wal_senders=3
+        -c max_replication_slots=3
+        -c hot_standby=on
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 5
+
+  db-replica:
+    image: postgres:16-alpine
+    container_name: pg-replica
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGUSER: replicator
+      PGPASSWORD: repl_password
+    volumes:
+      - pg_replica_data:/var/lib/postgresql/data
+    entrypoint:
+      - bash
+      - -c
+      - |
+        set -e
+        until pg_isready -h db -p 5432 -U postgres; do sleep 1; done
+        if [ ! -f /var/lib/postgresql/data/PG_VERSION ]; then
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            rm -rf /var/lib/postgresql/data/*
+            if pg_basebackup -h db -U replicator -D /var/lib/postgresql/data -Fp -Xs -P -R -S replica_slot_1; then
+              break
+            fi
+            echo "pg_basebackup attempt $${attempt} failed; retrying..."
+            sleep 2
+          done
+          [ -f /var/lib/postgresql/data/PG_VERSION ] || { echo "replica base backup failed"; exit 1; }
+          grep -q primary_slot_name /var/lib/postgresql/data/postgresql.auto.conf || echo "primary_slot_name = 'replica_slot_1'" >> /var/lib/postgresql/data/postgresql.auto.conf
+          chown -R postgres:postgres /var/lib/postgresql/data
+        fi
+        chmod 0700 /var/lib/postgresql/data
+        exec su-exec postgres postgres -c hot_standby=on
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+
+  backend:
+    build:
+      context: ./backend
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/urlshortener
+      DATABASE_READ_URL: postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@db-replica:5432/urlshortener
+      REDIS_URL: redis://redis:6379/0
+      BASE_URL: http://localhost
+    depends_on:
+      db:
+        condition: service_healthy
+      db-replica:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+      - frontend
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+volumes:
+  pg_primary_data:
+  pg_replica_data:

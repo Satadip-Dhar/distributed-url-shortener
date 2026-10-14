@@ -1,0 +1,6 @@
+apiVersion: v2
+name: url-shortener
+description: A URL Shortener service with FastAPI, PostgreSQL, Redis
+type: application
+version: 0.1.0       # Chart version (bump on chart changes)
+appVersion: "1.0.0"  # App version (matches your Docker image tag)

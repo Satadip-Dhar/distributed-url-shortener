@@ -1,0 +1,14 @@
+# Ruff configuration (backend linting — used by GitHub Actions and `make lint`).
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+# B008: FastAPI declares dependencies as function-call defaults by design.
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# conftest.py sets environment variables before importing the app on purpose.
+"backend/tests/conftest.py" = ["E402"]

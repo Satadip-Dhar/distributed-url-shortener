@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-replica
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: postgres-replica
+spec:
+  serviceName: postgres-replica
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres-replica
+  template:
+    metadata:
+      labels:
+        app: postgres-replica
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image }}
+          command: ["bash", "-c"]
+          args:
+            - |
+              set -e
+              export PGDATA=/var/lib/postgresql/data/pgdata
+              until pg_isready -h postgres-primary -p 5432 -U postgres; do sleep 1; done
+              mkdir -p "$PGDATA"
+              if [ ! -f "$PGDATA/PG_VERSION" ]; then
+                for attempt in 1 2 3 4 5 6 7 8 9 10; do
+                  rm -rf "${PGDATA:?}"/*
+                  if pg_basebackup -h postgres-primary -U replicator -D "$PGDATA" -Fp -Xs -P -R -S replica_slot_1; then
+                    break
+                  fi
+                  echo "pg_basebackup attempt ${attempt} failed; retrying..."
+                  sleep 2
+                done
+                [ -f "$PGDATA/PG_VERSION" ] || { echo "replica base backup failed"; exit 1; }
+                grep -q primary_slot_name "$PGDATA/postgresql.auto.conf" || echo "primary_slot_name = 'replica_slot_1'" >> "$PGDATA/postgresql.auto.conf"
+                chown -R postgres:postgres "$PGDATA"
+              fi
+              chmod 0700 "$PGDATA"
+              exec su-exec postgres postgres -c hot_standby=on
+          ports:
+            - containerPort: 5432
+          env:
+            - name: PGUSER
+              value: replicator
+            - name: PGPASSWORD
+              value: repl_password
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "postgres"]
+            initialDelaySeconds: 10
+            periodSeconds: 10
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.postgres.replica.storage }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-replica
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: postgres-replica
+spec:
+  selector:
+    app: postgres-replica
+  ports:
+    - port: 5432
+      targetPort: 5432

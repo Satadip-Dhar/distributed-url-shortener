@@ -1,0 +1,19 @@
+URL Shortener has been deployed to the "{{ .Values.namespace }}" namespace.
+
+Check the status of the deployment:
+
+  kubectl get pods -n {{ .Values.namespace }}
+  kubectl get svc -n {{ .Values.namespace }}
+
+Once all pods are Running, add the ingress host to /etc/hosts:
+
+  echo "127.0.0.1 {{ .Values.ingress.host }}" | sudo tee -a /etc/hosts
+
+Then open:  http://{{ .Values.ingress.host }}/
+
+Useful commands:
+
+  kubectl logs -n {{ .Values.namespace }} deployment/backend
+  helm upgrade {{ .Release.Name }} ./helm/url-shortener --namespace {{ .Values.namespace }} --set backend.image.tag=v1.0.1
+  helm history {{ .Release.Name }} -n {{ .Values.namespace }}
+  helm rollback {{ .Release.Name }} 1 -n {{ .Values.namespace }}
