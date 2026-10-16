@@ -329,7 +329,7 @@ sequenceDiagram
     A->>A: validate ShortenRequest (Pydantic)
     A->>P: INSERT urls (placeholder code) RETURNING id
     A->>A: short_code = encode_base62(id)
-    A->>P: UPDATE urls SET short_code=... ; COMMIT
+    A->>P: UPDATE urls SET short_code=...  COMMIT
     A->>R: SETEX url:{code} = original_url (3600s)
     A->>R: SETEX url:{code}:type = "302" (3600s)
     A-->>N: 201 {short_url, short_code, original_url}
